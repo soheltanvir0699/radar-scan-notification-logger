@@ -35,6 +35,7 @@ import io.shareit.transfer.notifications.NotificationStore
 import io.shareit.transfer.ui.screens.CapturedNotificationsScreen
 import io.shareit.transfer.ui.screens.DeviceSearchScreen
 import io.shareit.transfer.ui.screens.ReceiveQrScreen
+import io.shareit.transfer.ui.screens.ShareItFilesScreen
 import io.shareit.transfer.ui.screens.SecretUnlockScreen
 import io.shareit.transfer.ui.screens.ShareItHomeScreen
 import io.shareit.transfer.ui.theme.ShareItTheme
@@ -47,6 +48,7 @@ private enum class AppScreen {
     Home,
     SendSearch,
     ReceiveQr,
+    Files,
     NotifPin,
     Notifications,
 }
@@ -183,10 +185,13 @@ private fun ShareItAppRoute() {
                 onOpenNotifications = { screen = AppScreen.NotifPin },
                 onSend = { screen = AppScreen.SendSearch },
                 onReceive = { screen = AppScreen.ReceiveQr },
-                onFiles = {
-                    Toast.makeText(context, "Scanning files…", Toast.LENGTH_SHORT).show()
-                },
+                onFiles = { screen = AppScreen.Files },
             )
+        }
+
+        AppScreen.Files -> {
+            BackHandler { screen = AppScreen.Home }
+            ShareItFilesScreen(onBack = { screen = AppScreen.Home })
         }
 
         AppScreen.SendSearch -> {
