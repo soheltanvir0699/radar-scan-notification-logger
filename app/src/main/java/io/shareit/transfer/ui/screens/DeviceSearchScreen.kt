@@ -39,9 +39,9 @@ import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.rememberLottieComposition
 
 private val ShareBlueBar = Color(0xFF1565C0)
-private val Bg = Color(0xFFE3F2FD)
-private val TextDark = Color(0xFF263238)
-private val TextMuted = Color(0xFF607D8B)
+private val Bg = Color(0xFF0B1C34)
+private val TextDark = Color(0xFFFFFFFF)
+private val TextMuted = Color(0xFFB0C7E8)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

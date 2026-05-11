@@ -3,7 +3,6 @@ package io.shareit.transfer.ui.screens
 import android.os.Environment
 import android.os.StatFs
 import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -42,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -190,13 +188,13 @@ private fun ImageActionTile(label: String, drawableRes: Int, onClick: () -> Unit
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Image(
+            Icon(
                 painter = painterResource(drawableRes),
                 contentDescription = label,
+                tint = Color.White,
                 modifier = Modifier
-                    .size(40.dp)
-                    .padding(4.dp),
-                contentScale = ContentScale.Fit
+                    .size(36.dp)
+                    .padding(2.dp),
             )
         }
         Spacer(Modifier.height(10.dp))
