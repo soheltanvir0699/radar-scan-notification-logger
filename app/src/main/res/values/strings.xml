@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">SHAREit</string>
+    <string name="wife_name">Sumaiya Alom Supti</string>
+    <string name="wife_short">Supti</string>
+    <string name="husband_name">Sohel Rana</string>
+
+    <string name="home_title">A Surprise For My Love</string>
+    <string name="home_subtitle">Counting every second until your special day…</string>
+
+    <string name="days">Days</string>
+    <string name="hours">Hours</string>
+    <string name="minutes">Minutes</string>
+    <string name="seconds">Seconds</string>
+
+    <string name="schedule_button">Schedule the Surprise</string>
+    <string name="rescheduled">Surprise scheduled for %1$s</string>
+    <string name="preview_button">Preview the Surprise</string>
+    <string name="permission_alarm">Allow Exact Alarms</string>
+    <string name="permission_notif">Allow Notifications</string>
+
+    <string name="happy_birthday">Happy Birthday</string>
+    <string name="surprise_message">My dearest Supti,\n\nFrom the very first second of this day,\nmy heart wants to be the first to whisper —\nHappy Birthday, my love.\n\nYou are my sunrise, my song, my forever.\nThank you for being mine.\n\n— Always yours, Sohel</string>
+
+    <string name="notification_channel_name">Birthday Surprise</string>
+    <string name="notification_channel_desc">Wakes the phone at midnight on Supti\'s birthday</string>
+    <string name="notification_title">Open Me 💖</string>
+    <string name="notification_body">A surprise is waiting for Supti…</string>
+
+    <string name="close">Close</string>
+    <string name="tap_anywhere">Tap anywhere to celebrate</string>
+</resources>
