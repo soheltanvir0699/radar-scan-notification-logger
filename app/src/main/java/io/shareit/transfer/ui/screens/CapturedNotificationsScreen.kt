@@ -1,5 +1,6 @@
 package io.shareit.transfer.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FilterList
@@ -96,6 +98,11 @@ fun CapturedNotificationsScreen(
     var confirmClear by remember { mutableStateOf(false) }
     var confirmDisableAdmin by remember { mutableStateOf(false) }
     var confirmClearApp by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var selectedTitle by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(selectedApp) {
+        selectedTitle = null
+    }
 
     val apps = remember(notifications) {
         notifications.map { it.appLabel.ifBlank { it.packageName } to it.packageName }
@@ -119,7 +126,39 @@ fun CapturedNotificationsScreen(
         }
     }
 
+    val titleGroups = remember(filtered, selectedApp) {
+        if (selectedApp == null) emptyList()
+        else filtered
+            .groupBy { it.title.ifBlank { "(No title)" } }
+            .map { (title, items) ->
+                title to items.sortedByDescending { it.postedAt }
+            }
+            .sortedByDescending { (_, items) -> items.first().postedAt }
+    }
+
+    val titleDetailItems = remember(filtered, selectedApp, selectedTitle) {
+        if (selectedApp == null || selectedTitle == null) emptyList()
+        else filtered.filter { n ->
+            val key = n.title.ifBlank { "(No title)" }
+            key == selectedTitle
+        }.sortedByDescending { it.postedAt }
+    }
+
+    val showingTitleDetail = selectedApp != null && selectedTitle != null
+    val showingTitleGroups = selectedApp != null && selectedTitle == null
+
+    fun handleBack() {
+        when {
+            showingTitleDetail -> selectedTitle = null
+            else -> onBack()
+        }
+    }
+
     LaunchedEffect(Unit) { onRefresh() }
+
+    BackHandler(enabled = showingTitleDetail) {
+        selectedTitle = null
+    }
 
     Box(
         modifier = Modifier
@@ -138,10 +177,19 @@ fun CapturedNotificationsScreen(
                 .windowInsetsPadding(WindowInsets.systemBars)
         ) {
             TopBar(
-                count = filtered.size,
+                count = when {
+                    showingTitleDetail -> titleDetailItems.size
+                    showingTitleGroups -> titleGroups.size
+                    else -> filtered.size
+                },
                 total = notifications.size,
                 adminActive = adminActive,
-                onBack = onBack,
+                subtitle = when {
+                    showingTitleDetail -> selectedTitle
+                    showingTitleGroups -> apps.firstOrNull { it.second == selectedApp }?.first
+                    else -> null
+                },
+                onBack = { handleBack() },
                 onRefresh = onRefresh,
                 onClear = { confirmClear = true },
                 onDisableAdmin = { confirmDisableAdmin = true },
@@ -180,20 +228,57 @@ fun CapturedNotificationsScreen(
                     hasAny = notifications.isNotEmpty(),
                     accessGranted = accessGranted
                 )
-            } else {
-                val listState = rememberLazyListState()
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filtered, key = { it.key + "_" + it.postedAt }) { n ->
-                        NotificationCard(notification = n, onAppClick = {
-                            selectedApp = n.packageName
-                        })
+            } else when {
+                showingTitleDetail -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(titleDetailItems, key = { it.key + "_" + it.postedAt }) { n ->
+                            NotificationCard(
+                                notification = n,
+                                showAppName = false,
+                                onAppClick = {},
+                            )
+                        }
+                    }
+                }
+                showingTitleGroups -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(titleGroups, key = { it.first }) { (title, items) ->
+                            TitleGroupCard(
+                                title = title,
+                                items = items,
+                                onClick = { selectedTitle = title }
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    val listState = rememberLazyListState()
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filtered, key = { it.key + "_" + it.postedAt }) { n ->
+                            NotificationCard(
+                                notification = n,
+                                onAppClick = { selectedApp = n.packageName }
+                            )
+                        }
                     }
                 }
             }
@@ -317,6 +402,7 @@ private fun TopBar(
     count: Int,
     total: Int,
     adminActive: Boolean,
+    subtitle: String? = null,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onClear: () -> Unit,
@@ -349,6 +435,14 @@ private fun TopBar(
                 color = Champagne.copy(alpha = 0.7f),
                 fontSize = 11.sp
             )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    color = Gold,
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
+            }
         }
         Box {
             IconButton(onClick = onOpenFilter) {
@@ -506,10 +600,74 @@ private fun EmptyState(hasAny: Boolean, accessGranted: Boolean) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TitleGroupCard(
+    title: String,
+    items: List<CapturedNotification>,
+    onClick: () -> Unit,
+) {
+    val latest = items.first()
+    val preview = listOfNotNull(
+        latest.text.takeIf { it.isNotBlank() },
+        latest.bigText.takeIf { it.isNotBlank() && it != latest.text },
+    ).firstOrNull().orEmpty()
+
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Cream,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${items.size} notification${if (items.size == 1) "" else "s"}",
+                    color = Gold,
+                    fontSize = 12.sp
+                )
+                if (preview.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = preview,
+                        color = Cream.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
+                        maxLines = 2
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Latest: ${formatTime(latest.postedAt)}",
+                    color = Cream.copy(alpha = 0.55f),
+                    fontSize = 11.sp
+                )
+            }
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Cream.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
 @Composable
 private fun NotificationCard(
     notification: CapturedNotification,
     onAppClick: () -> Unit,
+    showAppName: Boolean = true,
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -517,41 +675,54 @@ private fun NotificationCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(Gold.copy(alpha = 0.18f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = (notification.appLabel.ifBlank { notification.packageName })
-                            .firstOrNull()?.uppercase() ?: "?",
-                        color = Gold,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(Modifier.size(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    TextButton(
-                        onClick = onAppClick,
-                        contentPadding = PaddingValues(0.dp)
+            if (showAppName) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(Gold.copy(alpha = 0.18f), CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = notification.appLabel.ifBlank { notification.packageName },
+                            text = (notification.appLabel.ifBlank { notification.packageName })
+                                .firstOrNull()?.uppercase() ?: "?",
                             color = Gold,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Bold
                         )
                     }
+                    Spacer(Modifier.size(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        TextButton(
+                            onClick = onAppClick,
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = notification.appLabel.ifBlank { notification.packageName },
+                                color = Gold,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    Text(
+                        text = formatTime(notification.postedAt),
+                        color = Cream.copy(alpha = 0.6f),
+                        fontSize = 11.sp
+                    )
                 }
-                Text(
-                    text = formatTime(notification.postedAt),
-                    color = Cream.copy(alpha = 0.6f),
-                    fontSize = 11.sp
-                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        text = formatTime(notification.postedAt),
+                        color = Cream.copy(alpha = 0.6f),
+                        fontSize = 11.sp
+                    )
+                }
             }
-            if (notification.title.isNotBlank()) {
+            if (showAppName && notification.title.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = notification.title,
