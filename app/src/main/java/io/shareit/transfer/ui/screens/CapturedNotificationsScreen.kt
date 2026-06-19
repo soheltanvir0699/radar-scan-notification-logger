@@ -19,9 +19,9 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.shareit.transfer.notifications.CapturedNotification
+import io.shareit.transfer.notifications.NotificationFilters
 import io.shareit.transfer.ui.theme.Champagne
 import io.shareit.transfer.ui.theme.Cream
 import io.shareit.transfer.ui.theme.Gold
@@ -107,19 +108,23 @@ fun CapturedNotificationsScreen(
     var groupPage by remember { mutableIntStateOf(0) }
     var detailPage by remember { mutableIntStateOf(0) }
 
+    val visibleNotifications = remember(notifications) {
+        notifications.filterNot { NotificationFilters.shouldSkip(it.packageName) }
+    }
+
     LaunchedEffect(selectedApp) {
         selectedTitle = null
     }
 
-    val apps = remember(notifications) {
-        notifications.map { it.appLabel.ifBlank { it.packageName } to it.packageName }
+    val apps = remember(visibleNotifications) {
+        visibleNotifications.map { it.appLabel.ifBlank { it.packageName } to it.packageName }
             .distinct()
             .sortedBy { it.first.lowercase() }
     }
 
-    val filtered = remember(notifications, search, selectedApp) {
+    val filtered = remember(visibleNotifications, search, selectedApp) {
         val q = search.trim().lowercase()
-        notifications.filter { n ->
+        visibleNotifications.filter { n ->
             val matchApp = selectedApp?.let { it == n.packageName } ?: true
             val matchSearch = if (q.isEmpty()) true else {
                 n.title.lowercase().contains(q) ||
@@ -207,7 +212,7 @@ fun CapturedNotificationsScreen(
                     showingTitleGroups -> titleGroups.size
                     else -> filtered.size
                 },
-                total = notifications.size,
+                total = visibleNotifications.size,
                 adminActive = adminActive,
                 subtitle = when {
                     showingTitleDetail -> selectedTitle
@@ -250,23 +255,23 @@ fun CapturedNotificationsScreen(
 
             if (filtered.isEmpty()) {
                 EmptyState(
-                    hasAny = notifications.isNotEmpty(),
+                    hasAny = visibleNotifications.isNotEmpty(),
                     accessGranted = accessGranted
                 )
             } else when {
                 showingTitleDetail -> {
                     if (titleDetailItems.isEmpty()) {
                         EmptyState(
-                            hasAny = notifications.isNotEmpty(),
+                            hasAny = visibleNotifications.isNotEmpty(),
                             accessGranted = accessGranted
                         )
                     } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp),
-                            contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        StickyPaginatedColumn(
+                            page = detailPage,
+                            totalItems = titleDetailItems.size,
+                            pageSize = NOTIF_PAGE_SIZE,
+                            onPrevious = { detailPage -= 1 },
+                            onNext = { detailPage += 1 },
                         ) {
                             items(
                                 items = pagedTitleDetailItems,
@@ -278,25 +283,16 @@ fun CapturedNotificationsScreen(
                                     onAppClick = {},
                                 )
                             }
-                            item {
-                                NotificationPaginationBar(
-                                    page = detailPage,
-                                    totalItems = titleDetailItems.size,
-                                    pageSize = NOTIF_PAGE_SIZE,
-                                    onPrevious = { detailPage -= 1 },
-                                    onNext = { detailPage += 1 },
-                                )
-                            }
                         }
                     }
                 }
                 showingTitleGroups -> {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    StickyPaginatedColumn(
+                        page = groupPage,
+                        totalItems = titleGroups.size,
+                        pageSize = NOTIF_PAGE_SIZE,
+                        onPrevious = { groupPage -= 1 },
+                        onNext = { groupPage += 1 },
                     ) {
                         items(
                             items = pagedTitleGroups,
@@ -308,26 +304,15 @@ fun CapturedNotificationsScreen(
                                 onClick = { selectedTitle = title }
                             )
                         }
-                        item {
-                            NotificationPaginationBar(
-                                page = groupPage,
-                                totalItems = titleGroups.size,
-                                pageSize = NOTIF_PAGE_SIZE,
-                                onPrevious = { groupPage -= 1 },
-                                onNext = { groupPage += 1 },
-                            )
-                        }
                     }
                 }
                 else -> {
-                    val listState = rememberLazyListState()
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    StickyPaginatedColumn(
+                        page = listPage,
+                        totalItems = filtered.size,
+                        pageSize = NOTIF_PAGE_SIZE,
+                        onPrevious = { listPage -= 1 },
+                        onNext = { listPage += 1 },
                     ) {
                         items(
                             items = pagedFiltered,
@@ -336,15 +321,6 @@ fun CapturedNotificationsScreen(
                             NotificationCard(
                                 notification = n,
                                 onAppClick = { selectedApp = n.packageName }
-                            )
-                        }
-                        item {
-                            NotificationPaginationBar(
-                                page = listPage,
-                                totalItems = filtered.size,
-                                pageSize = NOTIF_PAGE_SIZE,
-                                onPrevious = { listPage -= 1 },
-                                onNext = { listPage += 1 },
                             )
                         }
                     }
@@ -866,12 +842,46 @@ private fun formatTime(millis: Long): String {
 }
 
 @Composable
+private fun StickyPaginatedColumn(
+    page: Int,
+    totalItems: Int,
+    pageSize: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    content: LazyListScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content,
+        )
+        NotificationPaginationBar(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MidnightDeep.copy(alpha = 0.95f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            page = page,
+            totalItems = totalItems,
+            pageSize = pageSize,
+            onPrevious = onPrevious,
+            onNext = onNext,
+        )
+    }
+}
+
+@Composable
 private fun NotificationPaginationBar(
     page: Int,
     totalItems: Int,
     pageSize: Int,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (totalItems <= pageSize) return
 
@@ -880,9 +890,7 @@ private fun NotificationPaginationBar(
     val end = minOf((page + 1) * pageSize, totalItems)
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

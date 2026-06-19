@@ -15,7 +15,7 @@ class NotificationCaptureService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         val notification = sbn?.notification ?: return
         if (sbn.packageName == packageName) return
-        if (sbn.packageName in SkippedNotificationPackages) return
+        if (NotificationFilters.shouldSkip(sbn.packageName)) return
 
         val extras = notification.extras ?: return
         val title = readCharSequence(extras, Notification.EXTRA_TITLE)
@@ -68,16 +68,5 @@ class NotificationCaptureService : NotificationListenerService() {
             }.joinToString("\n")
         }
         return ""
-    }
-
-    companion object {
-        /** YouTube family apps — do not persist notifications from these packages. */
-        private val SkippedNotificationPackages = setOf(
-            "com.google.android.youtube",
-            "com.google.android.apps.youtube.music",
-            "com.google.android.youtube.tv",
-            "com.google.android.apps.youtube.kids",
-            "com.google.android.apps.youtube.creator",
-        )
     }
 }

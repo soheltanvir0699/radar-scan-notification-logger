@@ -135,13 +135,16 @@ fun LocationMapScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             if (!locationGranted) {
                 item {
                     PermissionCard(
@@ -212,15 +215,6 @@ fun LocationMapScreen(
                         onCopy = { copyLocation(context, point) },
                     )
                 }
-                item {
-                    PaginationBar(
-                        page = recentPage,
-                        totalItems = recentPoints.size,
-                        pageSize = PAGE_SIZE,
-                        onPrevious = { recentPage -= 1 },
-                        onNext = { recentPage += 1 },
-                    )
-                }
             }
 
             if (olderPoints.isNotEmpty()) {
@@ -273,9 +267,26 @@ fun LocationMapScreen(
                         },
                     )
                 }
+            }
+            }
 
-                item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                PaginationBar(
+                    label = "Recent",
+                    page = recentPage,
+                    totalItems = recentPoints.size,
+                    pageSize = PAGE_SIZE,
+                    onPrevious = { recentPage -= 1 },
+                    onNext = { recentPage += 1 },
+                )
+                if (olderPoints.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
                     PaginationBar(
+                        label = "Older",
                         page = olderPage,
                         totalItems = olderPoints.size,
                         pageSize = PAGE_SIZE,
@@ -306,6 +317,7 @@ private fun SectionHeader(title: String, subtitle: String) {
 
 @Composable
 private fun PaginationBar(
+    label: String? = null,
     page: Int,
     totalItems: Int,
     pageSize: Int,
@@ -318,11 +330,21 @@ private fun PaginationBar(
     val start = page * pageSize + 1
     val end = minOf((page + 1) * pageSize, totalItems)
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (label != null) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         OutlinedButton(onClick = onPrevious, enabled = page > 0) {
             Text("Previous")
         }
@@ -332,6 +354,7 @@ private fun PaginationBar(
         )
         OutlinedButton(onClick = onNext, enabled = page < totalPages - 1) {
             Text("Next")
+        }
         }
     }
 }
