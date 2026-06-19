@@ -47,7 +47,21 @@ data class CapturedNotification(
     /** Guaranteed-unique key for LazyColumn/LazyRow item identity. */
     fun listKey(): String {
         if (id.isNotBlank()) return id
-        return "${key}_${postedAt}_${title.hashCode()}_${text.hashCode()}_${bigText.hashCode()}"
+        return buildString {
+            append(key)
+            append('|')
+            append(postedAt)
+            append('|')
+            append(packageName)
+            append('|')
+            append(title)
+            append('|')
+            append(text)
+            append('|')
+            append(subText)
+            append('|')
+            append(bigText)
+        }
     }
 
     fun toJsonLine(): String = JSONObject().apply {
@@ -63,8 +77,9 @@ data class CapturedNotification(
     }.toString()
 
     companion object {
-        fun fromJsonLine(line: String): CapturedNotification? = try {
+        fun fromJsonLine(line: String, lineIndex: Int = 0): CapturedNotification? = try {
             val obj = JSONObject(line)
+            val storedId = obj.optString("id").sanitizeField()
             CapturedNotification(
                 packageName = obj.optString("pkg").sanitizeField(),
                 appLabel = obj.optString("app").sanitizeField(),
@@ -75,7 +90,7 @@ data class CapturedNotification(
                 postedAt = obj.optLong("ts"),
                 key = obj.optString("key").sanitizeField()
                     .ifBlank { "${obj.optString("pkg")}_${obj.optLong("ts")}" },
-                id = obj.optString("id").sanitizeField(),
+                id = storedId.ifBlank { "legacy_${lineIndex}_${line.hashCode()}" },
             )
         } catch (_: Throwable) {
             null

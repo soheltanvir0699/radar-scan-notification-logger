@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
@@ -63,6 +64,7 @@ fun ShareItHomeScreen(
     onTitleDoubleTap: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenLocation: () -> Unit,
+    onOpenChangePin: () -> Unit,
     onSend: () -> Unit,
     onReceive: () -> Unit,
     onFiles: () -> Unit,
@@ -106,6 +108,16 @@ fun ShareItHomeScreen(
                         fontSize = 11.sp,
                         modifier = Modifier.padding(bottom = 8.dp, end = 6.dp)
                     )
+                    ExtendedFloatingActionButton(
+                        onClick = onOpenChangePin,
+                        containerColor = Color(0xFF455A64),
+                        contentColor = Color.White,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    ) {
+                        Icon(Icons.Default.Lock, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Change PIN", fontWeight = FontWeight.SemiBold)
+                    }
                     ExtendedFloatingActionButton(
                         onClick = onOpenLocation,
                         containerColor = ShareBlueDark,

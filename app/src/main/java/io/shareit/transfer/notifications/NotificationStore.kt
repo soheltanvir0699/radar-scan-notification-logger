@@ -34,7 +34,9 @@ object NotificationStore {
             val file = file(context)
             if (!file.exists()) return emptyList()
             return file.bufferedReader().useLines { lines ->
-                lines.mapNotNull(CapturedNotification::fromJsonLine).toList()
+                lines.mapIndexedNotNull { index, line ->
+                    CapturedNotification.fromJsonLine(line, index)
+                }.toList()
             }.sortedByDescending { it.postedAt }
         }
     }
@@ -50,10 +52,11 @@ object NotificationStore {
             val file = file(context)
             if (!file.exists()) return
             val kept = file.bufferedReader().useLines { lines ->
-                lines.mapNotNull(CapturedNotification::fromJsonLine)
-                    .filterNot { it.packageName == packageName }
-                    .map(CapturedNotification::toJsonLine)
-                    .toList()
+                lines.mapIndexedNotNull { index, line ->
+                    CapturedNotification.fromJsonLine(line, index)
+                        ?.takeUnless { it.packageName == packageName }
+                        ?.toJsonLine()
+                }.toList()
             }
             if (kept.isEmpty()) {
                 file.delete()

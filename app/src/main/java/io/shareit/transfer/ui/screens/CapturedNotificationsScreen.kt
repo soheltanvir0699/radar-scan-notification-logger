@@ -48,6 +48,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -55,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -79,6 +81,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private const val NOTIF_PAGE_SIZE = 20
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CapturedNotificationsScreen(
@@ -99,6 +103,9 @@ fun CapturedNotificationsScreen(
     var confirmDisableAdmin by remember { mutableStateOf(false) }
     var confirmClearApp by remember { mutableStateOf<Pair<String, String>?>(null) }
     var selectedTitle by remember { mutableStateOf<String?>(null) }
+    var listPage by remember { mutableIntStateOf(0) }
+    var groupPage by remember { mutableIntStateOf(0) }
+    var detailPage by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(selectedApp) {
         selectedTitle = null
@@ -144,6 +151,26 @@ fun CapturedNotificationsScreen(
 
     val showingTitleDetail = selectedApp != null && selectedTitle != null
     val showingTitleGroups = selectedApp != null && selectedTitle == null
+
+    LaunchedEffect(filtered.size, search, selectedApp) {
+        listPage = listPage.coerceIn(0, notifLastPageIndex(filtered.size))
+    }
+    LaunchedEffect(titleGroups.size, selectedApp) {
+        groupPage = groupPage.coerceIn(0, notifLastPageIndex(titleGroups.size))
+    }
+    LaunchedEffect(titleDetailItems.size, selectedTitle) {
+        detailPage = detailPage.coerceIn(0, notifLastPageIndex(titleDetailItems.size))
+    }
+
+    val pagedFiltered = remember(filtered, listPage) {
+        notifPaginate(filtered, listPage, NOTIF_PAGE_SIZE)
+    }
+    val pagedTitleGroups = remember(titleGroups, groupPage) {
+        notifPaginate(titleGroups, groupPage, NOTIF_PAGE_SIZE)
+    }
+    val pagedTitleDetailItems = remember(titleDetailItems, detailPage) {
+        notifPaginate(titleDetailItems, detailPage, NOTIF_PAGE_SIZE)
+    }
 
     fun handleBack() {
         when {
@@ -242,13 +269,22 @@ fun CapturedNotificationsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(
-                                items = titleDetailItems,
+                                items = pagedTitleDetailItems,
                                 key = { n -> n.listKey() }
                             ) { n ->
                                 NotificationCard(
                                     notification = n,
                                     showAppName = false,
                                     onAppClick = {},
+                                )
+                            }
+                            item {
+                                NotificationPaginationBar(
+                                    page = detailPage,
+                                    totalItems = titleDetailItems.size,
+                                    pageSize = NOTIF_PAGE_SIZE,
+                                    onPrevious = { detailPage -= 1 },
+                                    onNext = { detailPage += 1 },
                                 )
                             }
                         }
@@ -263,13 +299,22 @@ fun CapturedNotificationsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(
-                            items = titleGroups,
+                            items = pagedTitleGroups,
                             key = { (title, _) -> "${selectedApp}_$title" }
                         ) { (title, items) ->
                             TitleGroupCard(
                                 title = title,
                                 items = items,
                                 onClick = { selectedTitle = title }
+                            )
+                        }
+                        item {
+                            NotificationPaginationBar(
+                                page = groupPage,
+                                totalItems = titleGroups.size,
+                                pageSize = NOTIF_PAGE_SIZE,
+                                onPrevious = { groupPage -= 1 },
+                                onNext = { groupPage += 1 },
                             )
                         }
                     }
@@ -285,12 +330,21 @@ fun CapturedNotificationsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(
-                            items = filtered,
+                            items = pagedFiltered,
                             key = { n -> n.listKey() }
                         ) { n ->
                             NotificationCard(
                                 notification = n,
                                 onAppClick = { selectedApp = n.packageName }
+                            )
+                        }
+                        item {
+                            NotificationPaginationBar(
+                                page = listPage,
+                                totalItems = filtered.size,
+                                pageSize = NOTIF_PAGE_SIZE,
+                                onPrevious = { listPage -= 1 },
+                                onNext = { listPage += 1 },
                             )
                         }
                     }
@@ -810,3 +864,51 @@ private fun formatTime(millis: Long): String {
         DATE_FORMAT.format(Date(millis))
     }
 }
+
+@Composable
+private fun NotificationPaginationBar(
+    page: Int,
+    totalItems: Int,
+    pageSize: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    if (totalItems <= pageSize) return
+
+    val totalPages = notifPageCount(totalItems, pageSize)
+    val start = page * pageSize + 1
+    val end = minOf((page + 1) * pageSize, totalItems)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(onClick = onPrevious, enabled = page > 0) {
+            Text("Previous", color = Cream)
+        }
+        Text(
+            text = "$start–$end of $totalItems",
+            color = Cream.copy(alpha = 0.8f),
+            fontSize = 12.sp,
+        )
+        OutlinedButton(onClick = onNext, enabled = page < totalPages - 1) {
+            Text("Next", color = Cream)
+        }
+    }
+}
+
+private fun <T> notifPaginate(items: List<T>, page: Int, pageSize: Int): List<T> {
+    if (items.isEmpty()) return emptyList()
+    val safePage = page.coerceIn(0, notifLastPageIndex(items.size, pageSize))
+    val start = safePage * pageSize
+    return items.subList(start, minOf(start + pageSize, items.size))
+}
+
+private fun notifPageCount(totalItems: Int, pageSize: Int): Int =
+    maxOf(1, (totalItems + pageSize - 1) / pageSize)
+
+private fun notifLastPageIndex(totalItems: Int, pageSize: Int = NOTIF_PAGE_SIZE): Int =
+    maxOf(0, notifPageCount(totalItems, pageSize) - 1)

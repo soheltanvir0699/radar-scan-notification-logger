@@ -8,19 +8,23 @@ import java.util.concurrent.TimeUnit
 
 object LocationScheduler {
 
-    private const val WORK_NAME = "location_capture_every_15m"
+    private const val WORK_NAME = "location_capture_periodic"
+    private const val LEGACY_WORK_NAME = "location_capture_every_15m"
 
     fun schedule(context: Context) {
         if (!LocationAccess.hasAnyLocation(context)) return
 
+        val workManager = WorkManager.getInstance(context.applicationContext)
+        workManager.cancelUniqueWork(LEGACY_WORK_NAME)
+
         val request = PeriodicWorkRequestBuilder<LocationCaptureWorker>(
-            15,
+            30,
             TimeUnit.MINUTES
         ).build()
 
-        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
+        workManager.enqueueUniquePeriodicWork(
             WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
     }

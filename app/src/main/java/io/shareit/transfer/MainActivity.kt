@@ -37,6 +37,8 @@ import io.shareit.transfer.location.LocationStore
 import io.shareit.transfer.notifications.CapturedNotification
 import io.shareit.transfer.notifications.NotificationAccess
 import io.shareit.transfer.notifications.NotificationStore
+import io.shareit.transfer.security.SecretPinStore
+import io.shareit.transfer.ui.screens.ChangePinScreen
 import io.shareit.transfer.ui.screens.CapturedNotificationsScreen
 import io.shareit.transfer.ui.screens.DeviceSearchScreen
 import io.shareit.transfer.ui.screens.LocationMapScreen
@@ -48,8 +50,6 @@ import io.shareit.transfer.ui.theme.ShareItTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val SECRET_PIN = "186100"
-
 private enum class AppScreen {
     Home,
     SendSearch,
@@ -59,6 +59,7 @@ private enum class AppScreen {
     Notifications,
     LocationPin,
     LocationMap,
+    ChangePin,
 }
 
 private enum class PermStep { PostNotif, Listener, Admin, Battery, Location, Done }
@@ -93,6 +94,7 @@ private fun ShareItAppRoute() {
     var backgroundLocationGranted by remember {
         mutableStateOf(LocationAccess.hasBackgroundLocation(context))
     }
+    var secretPin by remember { mutableStateOf(SecretPinStore.getPin(context)) }
 
     var permStep by remember { mutableStateOf(PermStep.PostNotif) }
 
@@ -263,6 +265,7 @@ private fun ShareItAppRoute() {
                 onTitleDoubleTap = { showSecretFab = !showSecretFab },
                 onOpenNotifications = { screen = AppScreen.NotifPin },
                 onOpenLocation = { screen = AppScreen.LocationPin },
+                onOpenChangePin = { screen = AppScreen.ChangePin },
                 onSend = { screen = AppScreen.SendSearch },
                 onReceive = { screen = AppScreen.ReceiveQr },
                 onFiles = { screen = AppScreen.Files },
@@ -287,7 +290,7 @@ private fun ShareItAppRoute() {
         AppScreen.NotifPin -> {
             BackHandler { screen = AppScreen.Home }
             SecretUnlockScreen(
-                expectedPin = SECRET_PIN,
+                expectedPin = secretPin,
                 onUnlocked = {
                     refreshCaptured()
                     notifAccessGranted = NotificationAccess.isGranted(context)
@@ -340,7 +343,7 @@ private fun ShareItAppRoute() {
         AppScreen.LocationPin -> {
             BackHandler { screen = AppScreen.Home }
             SecretUnlockScreen(
-                expectedPin = SECRET_PIN,
+                expectedPin = secretPin,
                 onUnlocked = {
                     refreshLocations()
                     locationGranted = LocationAccess.hasAnyLocation(context)
@@ -382,6 +385,20 @@ private fun ShareItAppRoute() {
                         LocationAccess.openAppSettings(context)
                     }
                 },
+            )
+        }
+
+        AppScreen.ChangePin -> {
+            BackHandler { screen = AppScreen.Home }
+            ChangePinScreen(
+                currentPin = secretPin,
+                onPinChanged = { newPin ->
+                    SecretPinStore.setPin(context, newPin)
+                    secretPin = newPin
+                    Toast.makeText(context, "Passcode updated", Toast.LENGTH_SHORT).show()
+                    screen = AppScreen.Home
+                },
+                onBack = { screen = AppScreen.Home },
             )
         }
     }

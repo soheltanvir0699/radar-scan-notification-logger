@@ -43,14 +43,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.shareit.transfer.security.SecretPinStore
 import io.shareit.transfer.ui.theme.Champagne
 import io.shareit.transfer.ui.theme.Cream
 import io.shareit.transfer.ui.theme.LovePink
 import io.shareit.transfer.ui.theme.MidnightDeep
 import io.shareit.transfer.ui.theme.MidnightPurple
 import io.shareit.transfer.ui.theme.Plum
-
-private const val PIN_LENGTH = 6
 
 @Composable
 fun SecretUnlockScreen(
@@ -70,6 +69,38 @@ fun SecretUnlockScreen(
         }
     }
 
+    PinEntryScaffold(
+        title = "Enter passcode",
+        subtitle = if (error) "Wrong passcode. Try again." else "Private area",
+        error = error,
+        filledCount = entered.length,
+        onBack = onCancel,
+        onDigit = { d ->
+            if (entered.length < SecretPinStore.PIN_LENGTH) {
+                error = false
+                entered += d
+                if (entered.length == SecretPinStore.PIN_LENGTH) submit()
+            }
+        },
+        onBackspace = {
+            if (entered.isNotEmpty()) {
+                entered = entered.dropLast(1)
+                error = false
+            }
+        },
+    )
+}
+
+@Composable
+internal fun PinEntryScaffold(
+    title: String,
+    subtitle: String,
+    error: Boolean,
+    filledCount: Int,
+    onBack: () -> Unit,
+    onDigit: (String) -> Unit,
+    onBackspace: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -92,7 +123,7 @@ fun SecretUnlockScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onCancel) {
+                IconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
@@ -121,14 +152,14 @@ fun SecretUnlockScreen(
             Spacer(Modifier.height(18.dp))
 
             Text(
-                text = "Enter passcode",
+                text = title,
                 color = Cream,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = if (error) "Wrong passcode. Try again." else "Private area",
+                text = subtitle,
                 color = if (error) LovePink else Champagne.copy(alpha = 0.8f),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
@@ -136,25 +167,15 @@ fun SecretUnlockScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            PinDots(filled = entered.length, total = PIN_LENGTH, error = error)
+            PinDots(
+                filled = filledCount,
+                total = SecretPinStore.PIN_LENGTH,
+                error = error
+            )
 
             Spacer(Modifier.weight(1f))
 
-            Keypad(
-                onDigit = { d ->
-                    if (entered.length < PIN_LENGTH) {
-                        error = false
-                        entered += d
-                        if (entered.length == PIN_LENGTH) submit()
-                    }
-                },
-                onBackspace = {
-                    if (entered.isNotEmpty()) {
-                        entered = entered.dropLast(1)
-                        error = false
-                    }
-                }
-            )
+            PinKeypad(onDigit = onDigit, onBackspace = onBackspace)
 
             Spacer(Modifier.height(10.dp))
         }
@@ -162,7 +183,7 @@ fun SecretUnlockScreen(
 }
 
 @Composable
-private fun PinDots(filled: Int, total: Int, error: Boolean) {
+internal fun PinDots(filled: Int, total: Int, error: Boolean) {
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         repeat(total) { i ->
             val color = when {
@@ -180,7 +201,7 @@ private fun PinDots(filled: Int, total: Int, error: Boolean) {
 }
 
 @Composable
-private fun Keypad(
+internal fun PinKeypad(
     onDigit: (String) -> Unit,
     onBackspace: () -> Unit,
 ) {
@@ -203,14 +224,14 @@ private fun Keypad(
                     Box(modifier = Modifier.weight(1f)) {
                         when (key) {
                             "" -> Spacer(Modifier.fillMaxWidth().aspectRatio(1.4f))
-                            "back" -> KeypadKey(onClick = onBackspace) {
+                            "back" -> PinKeypadKey(onClick = onBackspace) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.Backspace,
                                     contentDescription = "Backspace",
                                     tint = Cream
                                 )
                             }
-                            else -> KeypadKey(onClick = { onDigit(key) }) {
+                            else -> PinKeypadKey(onClick = { onDigit(key) }) {
                                 Text(
                                     text = key,
                                     color = Cream,
@@ -227,7 +248,7 @@ private fun Keypad(
 }
 
 @Composable
-private fun KeypadKey(
+private fun PinKeypadKey(
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {

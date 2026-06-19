@@ -21,6 +21,20 @@ data class LocationPoint(
     fun displayAddress(): String =
         address.trim().ifBlank { displayCoordinates() }
 
+    fun copyText(): String = buildString {
+        append(displayAddress())
+        append('\n')
+        append(displayCoordinates())
+        append('\n')
+        append(displayTime())
+        if (accuracyMeters > 0f) {
+            append('\n')
+            append("Accuracy: ±${accuracyMeters.toInt()} m")
+        }
+    }
+
+    fun listKey(): String = "${capturedAt}_${latitude}_${longitude}"
+
     fun toJsonLine(): String = JSONObject().apply {
         put("lat", latitude)
         put("lng", longitude)
