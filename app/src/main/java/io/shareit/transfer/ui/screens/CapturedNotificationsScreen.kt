@@ -129,19 +129,17 @@ fun CapturedNotificationsScreen(
     val titleGroups = remember(filtered, selectedApp) {
         if (selectedApp == null) emptyList()
         else filtered
-            .groupBy { it.title.ifBlank { "(No title)" } }
+            .groupBy { it.titleGroupKey() }
             .map { (title, items) ->
                 title to items.sortedByDescending { it.postedAt }
             }
-            .sortedByDescending { (_, items) -> items.first().postedAt }
+            .sortedByDescending { (_, items) -> items.firstOrNull()?.postedAt ?: 0L }
     }
 
     val titleDetailItems = remember(filtered, selectedApp, selectedTitle) {
         if (selectedApp == null || selectedTitle == null) emptyList()
-        else filtered.filter { n ->
-            val key = n.title.ifBlank { "(No title)" }
-            key == selectedTitle
-        }.sortedByDescending { it.postedAt }
+        else filtered.filter { it.titleGroupKey() == selectedTitle }
+            .sortedByDescending { it.postedAt }
     }
 
     val showingTitleDetail = selectedApp != null && selectedTitle != null
@@ -230,19 +228,29 @@ fun CapturedNotificationsScreen(
                 )
             } else when {
                 showingTitleDetail -> {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(titleDetailItems, key = { it.key + "_" + it.postedAt }) { n ->
-                            NotificationCard(
-                                notification = n,
-                                showAppName = false,
-                                onAppClick = {},
-                            )
+                    if (titleDetailItems.isEmpty()) {
+                        EmptyState(
+                            hasAny = notifications.isNotEmpty(),
+                            accessGranted = accessGranted
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(
+                                items = titleDetailItems,
+                                key = { n -> n.listKey() }
+                            ) { n ->
+                                NotificationCard(
+                                    notification = n,
+                                    showAppName = false,
+                                    onAppClick = {},
+                                )
+                            }
                         }
                     }
                 }
@@ -254,7 +262,10 @@ fun CapturedNotificationsScreen(
                         contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(titleGroups, key = { it.first }) { (title, items) ->
+                        items(
+                            items = titleGroups,
+                            key = { (title, _) -> "${selectedApp}_$title" }
+                        ) { (title, items) ->
                             TitleGroupCard(
                                 title = title,
                                 items = items,
@@ -273,7 +284,10 @@ fun CapturedNotificationsScreen(
                         contentPadding = PaddingValues(bottom = 16.dp, top = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(filtered, key = { it.key + "_" + it.postedAt }) { n ->
+                        items(
+                            items = filtered,
+                            key = { n -> n.listKey() }
+                        ) { n ->
                             NotificationCard(
                                 notification = n,
                                 onAppClick = { selectedApp = n.packageName }
@@ -607,11 +621,8 @@ private fun TitleGroupCard(
     items: List<CapturedNotification>,
     onClick: () -> Unit,
 ) {
-    val latest = items.first()
-    val preview = listOfNotNull(
-        latest.text.takeIf { it.isNotBlank() },
-        latest.bigText.takeIf { it.isNotBlank() && it != latest.text },
-    ).firstOrNull().orEmpty()
+    val latest = items.firstOrNull() ?: return
+    val preview = latest.displayMessage().takeIf { it != "(No message)" }.orEmpty()
 
     Card(
         onClick = onClick,
@@ -669,6 +680,9 @@ private fun NotificationCard(
     onAppClick: () -> Unit,
     showAppName: Boolean = true,
 ) {
+    val titleText = notification.displayTitle()
+    val messageText = notification.displayMessage()
+
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
@@ -713,8 +727,17 @@ private fun NotificationCard(
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        text = titleText,
+                        color = Cream,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.size(8.dp))
                     Text(
                         text = formatTime(notification.postedAt),
                         color = Cream.copy(alpha = 0.6f),
@@ -722,28 +745,27 @@ private fun NotificationCard(
                     )
                 }
             }
-            if (showAppName && notification.title.isNotBlank()) {
+
+            if (showAppName) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = notification.title,
+                    text = titleText,
                     color = Cream,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp
                 )
             }
-            val body = listOfNotNull(
-                notification.text.takeIf { it.isNotBlank() },
-                notification.bigText.takeIf { it.isNotBlank() && it != notification.text },
-                notification.subText.takeIf { it.isNotBlank() },
-            ).joinToString(separator = "\n")
-            if (body.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = body,
-                    color = Cream.copy(alpha = 0.85f),
-                    fontSize = 13.sp
-                )
-            }
+
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = messageText,
+                color = if (messageText == "(No message)") {
+                    Cream.copy(alpha = 0.5f)
+                } else {
+                    Cream.copy(alpha = 0.85f)
+                },
+                fontSize = 13.sp
+            )
         }
     }
 }

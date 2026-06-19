@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,6 +62,7 @@ fun ShareItHomeScreen(
     showSecretButton: Boolean,
     onTitleDoubleTap: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenLocation: () -> Unit,
     onSend: () -> Unit,
     onReceive: () -> Unit,
     onFiles: () -> Unit,
@@ -104,6 +106,16 @@ fun ShareItHomeScreen(
                         fontSize = 11.sp,
                         modifier = Modifier.padding(bottom = 8.dp, end = 6.dp)
                     )
+                    ExtendedFloatingActionButton(
+                        onClick = onOpenLocation,
+                        containerColor = ShareBlueDark,
+                        contentColor = Color.White,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    ) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Location", fontWeight = FontWeight.SemiBold)
+                    }
                     ExtendedFloatingActionButton(
                         onClick = onOpenNotifications,
                         containerColor = ShareBlue,

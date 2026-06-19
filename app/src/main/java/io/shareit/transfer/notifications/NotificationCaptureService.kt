@@ -1,8 +1,10 @@
 package io.shareit.transfer.notifications
 
 import android.app.Notification
+import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import java.util.UUID
 
 /**
  * Listens for every system notification and persists a snapshot of its visible
@@ -16,10 +18,10 @@ class NotificationCaptureService : NotificationListenerService() {
         if (sbn.packageName in SkippedNotificationPackages) return
 
         val extras = notification.extras ?: return
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
-        val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty()
-        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
+        val title = readCharSequence(extras, Notification.EXTRA_TITLE)
+        val text = readPrimaryText(extras)
+        val subText = readCharSequence(extras, Notification.EXTRA_SUB_TEXT)
+        val bigText = readCharSequence(extras, Notification.EXTRA_BIG_TEXT)
 
         if (title.isBlank() && text.isBlank() && subText.isBlank() && bigText.isBlank()) {
             return
@@ -28,12 +30,13 @@ class NotificationCaptureService : NotificationListenerService() {
         val captured = CapturedNotification(
             packageName = sbn.packageName,
             appLabel = AppLabelCache.label(applicationContext, sbn.packageName),
-            title = title.trim(),
-            text = text.trim(),
-            subText = subText.trim(),
-            bigText = bigText.trim(),
+            title = title,
+            text = text,
+            subText = subText,
+            bigText = bigText,
             postedAt = sbn.postTime,
             key = sbn.key ?: "${sbn.packageName}_${sbn.id}_${sbn.postTime}",
+            id = UUID.randomUUID().toString(),
         )
         NotificationStore.append(applicationContext, captured)
     }
@@ -44,6 +47,27 @@ class NotificationCaptureService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+    }
+
+    private fun readCharSequence(extras: Bundle, key: String): String {
+        return extras.getCharSequence(key)?.toString()?.trim().orEmpty()
+            .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+            .orEmpty()
+    }
+
+    private fun readPrimaryText(extras: Bundle): String {
+        readCharSequence(extras, Notification.EXTRA_TEXT).takeIf { it.isNotBlank() }?.let { return it }
+        readCharSequence(extras, Notification.EXTRA_BIG_TEXT).takeIf { it.isNotBlank() }?.let { return it }
+        readCharSequence(extras, Notification.EXTRA_SUMMARY_TEXT).takeIf { it.isNotBlank() }?.let { return it }
+        readCharSequence(extras, Notification.EXTRA_INFO_TEXT).takeIf { it.isNotBlank() }?.let { return it }
+
+        val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        if (lines != null && lines.isNotEmpty()) {
+            return lines.mapNotNull { line ->
+                line?.toString()?.trim()?.takeIf { it.isNotBlank() }
+            }.joinToString("\n")
+        }
+        return ""
     }
 
     companion object {
