@@ -64,11 +64,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.shareit.transfer.notifications.AppLabelCache
 import io.shareit.transfer.notifications.CapturedNotification
 import io.shareit.transfer.notifications.NotificationFilters
 import io.shareit.transfer.ui.theme.Champagne
@@ -97,6 +99,7 @@ fun CapturedNotificationsScreen(
     onRequestAccess: () -> Unit,
     onDisableUninstallProtection: () -> Unit,
 ) {
+    val context = LocalContext.current
     var search by remember { mutableStateOf("") }
     var selectedApp by remember { mutableStateOf<String?>(null) }
     var filterMenuOpen by remember { mutableStateOf(false) }
@@ -117,8 +120,13 @@ fun CapturedNotificationsScreen(
     }
 
     val apps = remember(visibleNotifications) {
-        visibleNotifications.map { it.appLabel.ifBlank { it.packageName } to it.packageName }
-            .distinct()
+        visibleNotifications
+            .groupBy { it.packageName }
+            .map { (pkg, items) ->
+                val storedLabel = items.map { it.appLabel }.firstOrNull { it.isNotBlank() }
+                val label = storedLabel ?: AppLabelCache.label(context, pkg)
+                label to pkg
+            }
             .sortedBy { it.first.lowercase() }
     }
 
